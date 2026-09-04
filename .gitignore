@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vercel/
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Runtime data and generated credentials (local Docker fallback only)
+data/*
+!data/.gitkeep

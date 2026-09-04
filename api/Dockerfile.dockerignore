@@ -1,0 +1,9 @@
+*
+!api/
+api/*
+!api/package.json
+!api/package-lock.json
+!api/server.js
+!lib/
+lib/*
+!lib/opengym-storage.js

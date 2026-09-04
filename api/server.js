@@ -1,0 +1,520 @@
+/* opengym-api — passkey auth + persistent per-user state for openGym.
+   Runs as a plain Node server in Docker or as one Vercel Function.       */
+import http from 'node:http';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import {
+  generateRegistrationOptions, verifyRegistrationResponse,
+  generateAuthenticationOptions, verifyAuthenticationResponse
+} from '@simplewebauthn/server';
+import webpush from 'web-push';
+import { createClient } from '@supabase/supabase-js';
+import { createStorage } from '../lib/opengym-storage.js';
+
+const PORT = +(process.env.PORT || 3000);
+const DATA = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp/opengym-data' : '/data');
+const RP_ID = process.env.RP_ID || 'localhost';
+const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
+const RP_NAME = process.env.RP_NAME || 'openGym';
+// Admin dashboard (issue): admins are matched by uid; INVITE_ONLY gates new signups behind a
+// code the admin generates. Both default off so a fresh self-hosted instance stays open.
+const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
+// 90 days keeps someone who trains a few times a week permanently signed in without a stolen
+// cookie staying good for a year. Overridable because a family instance and one on the open
+// internet don't want the same number. Only affects cookies minted from now on — the expiry is
+// baked into each cookie when it's issued, so lowering this never cuts an existing session short.
+const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90);
+const MAX_BODY = 5 * 1024 * 1024;
+// Secure cookies require HTTPS; over plain http://localhost the flag would drop the cookie
+const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : '';
+
+fs.mkdirSync(DATA, { recursive: true });
+
+/* ---------- secret + persistence ---------- */
+const storage = createStorage({
+  dataDir: DATA,
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  createClient
+});
+const secretFile = path.join(DATA, 'secret');
+let SECRET = process.env.SESSION_SECRET || '';
+if (!SECRET) {
+  if (process.env.VERCEL) throw new Error('SESSION_SECRET is required on Vercel');
+  if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+}
+
+const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+
+/* ---------- push notifications (Web Push / VAPID) ---------- */
+let vapid = await storage.getConfig('vapid');
+if (!vapid) {
+  vapid = webpush.generateVAPIDKeys();
+  await storage.setConfig('vapid', vapid);
+}
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost');
+webpush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
+
+async function sendPush(userId, payload) {
+  const subs = await storage.listSubscriptions(userId);
+  if (!subs.length) return;
+  const body = JSON.stringify(payload);
+  await Promise.all(subs.map(async sub => {
+    // urgency 'high' is the one lever we have over delivery speed — iOS/Android throttle
+    // low-urgency background push more aggressively under battery-saving modes. TTL is left
+    // at the library default (long) so a briefly-offline device still gets it once reconnected,
+    // rather than risking it being dropped for the sake of shaving off latency that TTL doesn't
+    // actually control anyway.
+    try { await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, body, { urgency: 'high' }); }
+    catch (e) {
+      console.error('push send failed', userId, e.statusCode, e.body || e.message);
+      if (e.statusCode === 404 || e.statusCode === 410) {
+        await storage.deleteSubscriptionByEndpoint(sub.endpoint);
+      }
+    }
+  }));
+}
+
+// "Workout planned today" reminder — one per user per day, at their chosen time.
+// Duplicated (not imported) from frontend/src/lib/history.js effectiveRoutineId — tiny pure helper, not worth sharing across the two runtimes.
+function effectiveRoutineId(S, iso) {
+  const ov = S.dayPlan?.[iso];
+  if (ov === 'rest') return null;
+  if (ov && S.routines?.some(r => r.id === ov)) return ov;
+  const wd = new Date(iso + 'T12:00:00').getDay();
+  return S.week?.[wd] || null;
+}
+// Computes "now" in an arbitrary IANA zone (e.g. "Europe/Lisbon") instead of the server's own —
+// each user's reminder fires by their own clock, wherever they and their phone actually are.
+function userNow(tz) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).formatToParts(new Date());
+    const g = t => parts.find(p => p.type === t)?.value;
+    return { date: `${g('year')}-${g('month')}-${g('day')}`, hhmm: `${g('hour')}:${g('minute')}` };
+  } catch { return null; } // unknown/invalid tz string — skip this user rather than guess
+}
+async function runScheduledNotifications() {
+  const nowMs = Date.now();
+  const dueTimers = await storage.claimDueRestTimers(nowMs);
+  await Promise.all(dueTimers.map(({ userId }) => sendPush(userId, {
+    title: 'Rest over 💪', body: 'Time for your next set.', tag: 'rest-timer'
+  })));
+
+  const [users, subs] = await Promise.all([storage.listUsers(), storage.listSubscriptions()]);
+  for (const user of users) {
+    if (!subs.some(s => s.userId === user.id)) continue;
+    const S = await storage.readState(user.id);
+    if (!S?.reminder?.on) continue;
+    const now = userNow(S.reminder.tz || 'UTC');
+    if (!now || S.reminder.time !== now.hhmm) continue;
+    if (user.lastReminder === now.date) continue;
+    if ((S.workouts || []).some(w => w.d === now.date)) continue;
+    const rid = effectiveRoutineId(S, now.date);
+    if (!rid) continue; // rest day — nothing planned
+    const routine = (S.routines || []).find(r => r.id === rid);
+    console.log('reminder firing', user.id, rid);
+    await storage.markReminderSent(user.id, now.date);
+    await sendPush(user.id, {
+      title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today',
+      body: "It's on your plan — let's go 💪",
+      tag: 'day-reminder'
+    });
+  }
+  return { restTimers: dueTimers.length };
+}
+
+/* ---------- sessions (signed cookie) ---------- */
+function sign(payload) {
+  const mac = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
+  return payload + '.' + mac;
+}
+function verifySig(token) {
+  const i = token.lastIndexOf('.');
+  if (i < 0) return null;
+  const payload = token.slice(0, i), mac = token.slice(i + 1);
+  const expect = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expect))) return null;
+  } catch { return null; }
+  return payload;
+}
+// Session payload is `<uid>:<expiry>:<version>`, where the version is the user's `sv` counter.
+// Bumping `sv` (POST /api/logout/all) makes every cookie ever handed out for that account stop
+// verifying, which is the only revocation there was before short of deleting ./data/secret and
+// signing out the whole instance. Cookies minted before `sv` existed have no third field and are
+// read as version 0, matching a user who has never bumped — they stay valid until they expire.
+const sessionVersion = user => user.sv || 0;
+function makeSession(user) {
+  const exp = Date.now() + SESSION_DAYS * 86400000;
+  return sign(user.id + ':' + exp + ':' + sessionVersion(user));
+}
+async function readSession(req) {
+  const cookies = Object.fromEntries((req.headers.cookie || '').split(';').map(c => {
+    const i = c.indexOf('='); return i < 0 ? ['', ''] : [c.slice(0, i).trim(), c.slice(i + 1).trim()];
+  }));
+  const tok = cookies.gymsid;
+  if (!tok) return null;
+  const payload = verifySig(tok);
+  if (!payload) return null;
+  const [uid, exp, ver] = payload.split(':');
+  if (!uid || +exp < Date.now()) return null;
+  const user = await storage.getUser(uid);
+  if (!user) return null;
+  if (user.disabled) return null;           // disabled accounts are locked out everywhere
+  // Missing third field = pre-versioning cookie = version 0. Anything non-numeric is a malformed
+  // payload (it still had to pass the HMAC, so this is belt-and-braces) and is refused outright.
+  const claimed = ver === undefined ? 0 : Number(ver);
+  if (!Number.isInteger(claimed) || claimed !== sessionVersion(user)) return null;
+  return user;
+}
+// Guard for /api/admin/* — resolves the caller and 401/403s if they aren't an admin.
+async function requireAdmin(req, res) {
+  const user = await readSession(req);
+  if (!user) { json(res, 401, { error: 'not signed in' }); return null; }
+  if (!isAdmin(user)) { json(res, 403, { error: 'forbidden' }); return null; }
+  return user;
+}
+function sessionCookie(user) {
+  return `gymsid=${makeSession(user)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${SECURE} SameSite=Lax`;
+}
+const clearCookie = `gymsid=; Path=/; Max-Age=0; HttpOnly;${SECURE} SameSite=Lax`;
+
+/* ---------- helpers ---------- */
+function json(res, code, obj, extraHeaders) {
+  const body = JSON.stringify(obj);
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(extraHeaders || {}) });
+  res.end(body);
+}
+function readBody(req) {
+  if (req.body !== undefined) {
+    if (typeof req.body !== 'string') return Promise.resolve(req.body || {});
+    try { return Promise.resolve(req.body ? JSON.parse(req.body) : {}); }
+    catch { return Promise.reject(new Error('bad json')); }
+  }
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', d => {
+      size += d.length;
+      if (size > MAX_BODY) { reject(new Error('body too large')); req.destroy(); return; }
+      chunks.push(d);
+    });
+    req.on('end', () => {
+      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); }
+      catch { reject(new Error('bad json')); }
+    });
+    req.on('error', reject);
+  });
+}
+const b64uToBuf = s => Buffer.from(s, 'base64url');
+
+/* ---------- routes ---------- */
+const routes = {
+  'GET /api/health': async (req, res) => json(res, 200, { ok: true, users: await storage.userCount(), storage: storage.mode }),
+
+  // Public config the login screen needs before anyone is signed in.
+  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY }),
+
+  'GET /api/me': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } });
+  },
+
+  'POST /api/register/options': async (req, res) => {
+    const body = await readBody(req);
+    const name = String(body.name || '').trim().slice(0, 40);
+    if (!name) return json(res, 400, { error: 'name required' });
+    const code = String(body.code || '').trim().toUpperCase();
+    if (INVITE_ONLY && !(await storage.validInvite(code)))
+      return json(res, 403, { error: 'a valid invite code is required' });
+    const uid = crypto.randomBytes(12).toString('base64url');
+    const options = await generateRegistrationOptions({
+      rpName: RP_NAME, rpID: RP_ID,
+      userID: Buffer.from(uid), userName: name, userDisplayName: name,
+      attestationType: 'none',
+      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+      excludeCredentials: []
+    });
+    const cid = await storage.putChallenge({ challenge: options.challenge, name, uid, code });
+    json(res, 200, { cid, options });
+  },
+
+  'POST /api/register/verify': async (req, res) => {
+    const body = await readBody(req);
+    const c = await storage.takeChallenge(body.cid);
+    if (!c || !c.uid) return json(res, 400, { error: 'challenge expired — try again' });
+    let verification;
+    try {
+      verification = await verifyRegistrationResponse({
+        response: body.credential,
+        expectedChallenge: c.challenge,
+        expectedOrigin: ORIGIN,
+        expectedRPID: RP_ID,
+        requireUserVerification: false
+      });
+    } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }); }
+    if (!verification.verified) return json(res, 400, { error: 'not verified' });
+    const { credential } = verification.registrationInfo;
+    const user = { id: c.uid, name: c.name, created: new Date().toISOString() };
+    const credentialRecord = {
+      id: credential.id, userId: user.id,
+      publicKey: Buffer.from(credential.publicKey).toString('base64url'),
+      counter: credential.counter || 0,
+      transports: body.credential?.response?.transports || []
+    };
+    const registered = await storage.registerUser(user, credentialRecord, c.code, INVITE_ONLY);
+    if (registered.error === 'credential_exists') return json(res, 409, { error: 'credential already registered' });
+    if (registered.error === 'invite_invalid') return json(res, 403, { error: 'invite code is no longer valid — ask for a new one' });
+    const savedUser = registered.user;
+    json(res, 200, { user: { id: savedUser.id, name: savedUser.name, admin: isAdmin(savedUser) } }, { 'Set-Cookie': sessionCookie(savedUser) });
+  },
+
+  'POST /api/login/options': async (req, res) => {
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID, userVerification: 'preferred', allowCredentials: []
+    });
+    const cid = await storage.putChallenge({ challenge: options.challenge });
+    json(res, 200, { cid, options });
+  },
+
+  'POST /api/login/verify': async (req, res) => {
+    const body = await readBody(req);
+    const c = await storage.takeChallenge(body.cid);
+    if (!c) return json(res, 400, { error: 'challenge expired — try again' });
+    const cred = await storage.findCredential(body.credential?.id);
+    if (!cred) return json(res, 404, { error: 'unknown passkey — create a profile first' });
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: body.credential,
+        expectedChallenge: c.challenge,
+        expectedOrigin: ORIGIN,
+        expectedRPID: RP_ID,
+        requireUserVerification: false,
+        credential: {
+          id: cred.id,
+          publicKey: b64uToBuf(cred.publicKey),
+          counter: cred.counter,
+          transports: cred.transports
+        }
+      });
+    } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }); }
+    if (!verification.verified) return json(res, 400, { error: 'not verified' });
+    await storage.updateCredentialCounter(cred.id, verification.authenticationInfo.newCounter);
+    const user = await storage.getUser(cred.userId);
+    if (!user) return json(res, 500, { error: 'user missing' });
+    if (user.disabled) return json(res, 403, { error: 'this account has been disabled' });
+    json(res, 200, { user: { id: user.id, name: user.name, admin: isAdmin(user) } }, { 'Set-Cookie': sessionCookie(user) });
+  },
+
+  'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
+
+  // "Sign out everywhere" — bumps this user's session version, which invalidates every cookie
+  // ever issued for the account, on every device, including a copy someone else walked off with.
+  // The caller's own cookie is cleared here too, so the browser doing it doesn't sit on a token
+  // it no longer accepts. Passkeys are untouched: signing back in works immediately.
+  'POST /api/logout/all': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    await storage.bumpSessionVersion(user.id);
+    json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie });
+  },
+
+  'GET /api/data': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, { state: await storage.readState(user.id) });
+  },
+
+  'PUT /api/data': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (!body.state || typeof body.state !== 'object') return json(res, 400, { error: 'state required' });
+    delete body.state.active;              // in-progress workouts stay device-local
+    await storage.writeState(user.id, body.state);
+    json(res, 200, { ok: true, ts: body.state._ts || null });
+  },
+
+  'GET /api/push/public-key': async (req, res) => json(res, 200, { key: vapid.publicKey }),
+
+  'POST /api/push/subscribe': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const sub = body.subscription;
+    if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return json(res, 400, { error: 'invalid subscription' });
+    await storage.upsertSubscription({ userId: user.id, endpoint: sub.endpoint, keys: sub.keys, created: new Date().toISOString() });
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/push/unsubscribe': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    await storage.deleteSubscription(user.id, body.endpoint);
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/push/test': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    await sendPush(user.id, { title: 'openGym', body: 'Test notification ✅ — this is what alerts look like.', tag: 'test' });
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/push/rest-timer': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    const sec = Math.max(1, Math.min(3600, Math.round(+body.seconds || 0)));
+    if (!sec) return json(res, 400, { error: 'seconds required' });
+    await storage.scheduleRestTimer(user.id, Date.now() + sec * 1000);
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/push/rest-timer/cancel': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    await storage.cancelRestTimer(user.id);
+    json(res, 200, { ok: true });
+  },
+
+  // Live-workout heartbeat: client pings while a workout is on screen; { active:false } drops it.
+  'POST /api/activity': async (req, res) => {
+    const user = await readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    const body = await readBody(req);
+    if (body.active) {
+      await storage.setPresence(user.id, {
+        name: String(body.name || '').slice(0, 60),
+        exIdx: +body.exIdx || 0, exTotal: +body.exTotal || 0,
+        setsDone: +body.setsDone || 0, setsTotal: +body.setsTotal || 0,
+        startedAt: +body.startedAt || Date.now(),
+        updatedAt: Date.now()
+      });
+    } else await storage.setPresence(user.id, null);
+    json(res, 200, { ok: true });
+  },
+
+  /* ---------- admin dashboard ---------- */
+  // One row per user, cheap enough for a personal instance (reads each state file once).
+  'GET /api/admin/users': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    const [allUsers, subs] = await Promise.all([storage.listUsers(), storage.listSubscriptions()]);
+    const users = await Promise.all(allUsers.map(async u => {
+      const S = await storage.readState(u.id) || {};
+      const workouts = S.workouts || [];
+      const last = workouts[workouts.length - 1];
+      return {
+        id: u.id, name: u.name, created: u.created || null,
+        disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
+        workouts: workouts.length,
+        lastWorkout: last ? last.d : null,
+        lastSync: S._ts || null,
+        hasPush: subs.some(s => s.userId === u.id),
+        live: await storage.getPresence(u.id)
+      };
+    }));
+    json(res, 200, { users, invite_only: INVITE_ONLY, now: Date.now() });
+  },
+
+  // Drill-down: full workout history + body-weight log for one user.
+  'GET /api/admin/user': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    const id = new URL(req.url, 'http://x').searchParams.get('id');
+    const u = await storage.getUser(id);
+    if (!u) return json(res, 404, { error: 'no such user' });
+    const S = await storage.readState(u.id) || {};
+    json(res, 200, {
+      user: { id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null },
+      unit: S.unit || 'kg',
+      lastSync: S._ts || null,
+      routines: (S.routines || []).map(r => ({ id: r.id, name: r.name, emoji: r.emoji, count: (r.ex || []).length })),
+      bodyweight: S.bodyweight || [],
+      workouts: (S.workouts || []).slice().reverse()   // newest first for display
+    });
+  },
+
+  'POST /api/admin/user/disable': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    const body = await readBody(req);
+    const u = await storage.getUser(body.id);
+    if (!u) return json(res, 404, { error: 'no such user' });
+    if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
+    const updated = await storage.setUserDisabled(u.id, !!body.disabled);
+    if (updated.disabled) await storage.setPresence(u.id, null); // drop them off "training now" at once
+    json(res, 200, { ok: true, id: updated.id, disabled: updated.disabled });
+  },
+
+  'GET /api/admin/invites': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    // resolve usedBy uid → name for display
+    const [storedInvites, users] = await Promise.all([storage.listInvites(), storage.listUsers()]);
+    const invites = storedInvites.map(i => ({
+      ...i, usedByName: i.usedBy ? (users.find(u => u.id === i.usedBy) || {}).name || null : null
+    }));
+    json(res, 200, { invites, invite_only: INVITE_ONLY });
+  },
+
+  'POST /api/admin/invites/new': async (req, res) => {
+    const admin = await requireAdmin(req, res); if (!admin) return;
+    const body = await readBody(req);
+    let code;
+    // 16 hex chars = 64 bits, up from 8 chars / 32 bits. The app has no rate limiting by design
+    // (that's the reverse proxy's job) and /api/register/options tells a caller whether a code is
+    // good, so the code itself has to be the thing that isn't worth guessing. Codes already in
+    // db.json keep working — validation is an exact string compare, never a length or format check.
+    do { code = crypto.randomBytes(8).toString('hex').toUpperCase(); } while (await storage.validInvite(code));
+    const invite = { code, note: String(body.note || '').slice(0, 60), createdBy: admin.id, created: new Date().toISOString() };
+    json(res, 200, { invite: await storage.createInvite(invite) });
+  },
+
+  'POST /api/admin/invites/revoke': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return;
+    const body = await readBody(req);
+    const result = await storage.revokeInvite(String(body.code || '').toUpperCase());
+    if (result.error === 'not_found') return json(res, 404, { error: 'no such code' });
+    if (result.error === 'used') return json(res, 400, { error: 'already used — cannot revoke' });
+    json(res, 200, { ok: true });
+  },
+
+  'POST /api/jobs/notifications': async (req, res) => {
+    const expected = process.env.CRON_SECRET || '';
+    if (!expected || req.headers.authorization !== `Bearer ${expected}`) {
+      return json(res, 401, { error: 'unauthorized' });
+    }
+    json(res, 200, { ok: true, ...(await runScheduledNotifications()) });
+  }
+};
+
+export async function handleRequest(req, res) {
+  const url = new URL(req.url, 'http://x');
+  const rewrittenRoute = url.searchParams.get('route');
+  const pathname = rewrittenRoute ? `/api/${rewrittenRoute}` : url.pathname;
+  const key = req.method + ' ' + pathname;
+  const handler = routes[key];
+  if (!handler) return json(res, 404, { error: 'not found' });
+  try { await handler(req, res); }
+  catch (e) {
+    console.error(key, e);
+    if (!res.headersSent) json(res, 500, { error: 'server error' });
+  }
+}
+
+export default handleRequest;
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  setInterval(() => runScheduledNotifications().catch(e => console.error('scheduled notifications failed', e)), 10000).unref();
+  http.createServer(handleRequest).listen(PORT, () => {
+    console.log(`gym-api on :${PORT} (rpID=${RP_ID}, origin=${ORIGIN}, storage=${storage.mode})`);
+  });
+}
