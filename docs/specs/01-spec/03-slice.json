@@ -1,0 +1,134 @@
+{
+  "slice_id": "03-slice",
+  "slice_number": "03",
+  "title": "Medios en desarrollo local",
+  "objective": "Proporcionar un procedimiento canónico y comprobado para que Vite sirva imágenes y GIF locales sin respuestas 502.",
+  "problem": "npm run dev redirige los medios a MEDIA_TARGET, pero no inicia el servidor esperado en 127.0.0.1:8888.",
+  "value_outcome": "Un desarrollador puede seguir un procedimiento documentado y ver miniaturas y animaciones en el frontend local.",
+  "scope": {
+    "includes": [
+      "Procedimiento local canónico",
+      "Documentación del orden de inicio y MEDIA_TARGET",
+      "Helper versionado frontend/scripts/serve-media.mjs",
+      "Smoke de un JPG, un GIF y el flujo visual",
+      "Troubleshooting de ECONNREFUSED y 502"
+    ],
+    "excludes": [
+      "Cambios productivos en Vercel",
+      "Copiar media a frontend/public o frontend/dist",
+      "Reemplazar Docker",
+      "Orquestación compleja",
+      "Pruebas de API, autenticación o persistencia",
+      "Cambios al dataset"
+    ]
+  },
+  "actors": [
+    "Desarrollador frontend",
+    "Contribuidor que prepara el entorno local"
+  ],
+  "preconditions": [
+    "Node y dependencias de frontend están disponibles",
+    "media/img y media/gif están poblados",
+    "El puerto de medios está libre o MEDIA_TARGET apunta a otro destino"
+  ],
+  "inputs": [
+    "frontend/vite.config.js",
+    "frontend/package.json",
+    "Documentación de desarrollo existente",
+    "Directorio media",
+    "Helper versionado frontend/scripts/serve-media.mjs y script dev:media"
+  ],
+  "outputs": [
+    "Procedimiento local canónico",
+    "Helper mínimo versionado sin dependencias externas",
+    "Troubleshooting de medios",
+    "Evidencia HTTP a través de Vite"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Usar el helper versionado",
+      "description": "Iniciar npm run dev:media para servir media con Node estándar."
+    },
+    {
+      "step": 2,
+      "name": "Documentar el comando",
+      "description": "Documentar dev:media y cómo alinear un puerto alternativo con MEDIA_TARGET."
+    },
+    {
+      "step": 3,
+      "name": "Iniciar los procesos",
+      "description": "Iniciar primero el servidor de medios y luego el frontend de Vite."
+    },
+    {
+      "step": 4,
+      "name": "Validar HTTP",
+      "description": "Solicitar un JPG y un GIF mediante las rutas proxy de Vite."
+    },
+    {
+      "step": 5,
+      "name": "Validar la interfaz",
+      "description": "Comprobar biblioteca, detalle y alternancia GIF/JPG."
+    },
+    {
+      "step": 6,
+      "name": "Documentar recuperación",
+      "description": "Explicar cómo identificar un servidor apagado, media vacío o puerto ocupado."
+    }
+  ],
+  "business_rules": [
+    "La raíz servida es media para exponer /img y /gif",
+    "Los archivos no se copian al bundle",
+    "Un puerto alternativo requiere MEDIA_TARGET explícito",
+    "Docker conserva su flujo actual",
+    "La API no es necesaria para validar medios en modo invitado"
+  ],
+  "validations": [
+    "El fallo inicial reproduce 502 con el servidor apagado",
+    "El JPG responde 200 y image/jpeg mediante Vite",
+    "El GIF responde 200 y image/gif mediante Vite",
+    "La miniatura renderizada tiene dimensión natural mayor que cero",
+    "El detalle muestra el GIF y alterna al JPG",
+    "El troubleshooting identifica ECONNREFUSED"
+  ],
+  "error_cases": [
+    "El puerto 8888 está ocupado",
+    "El directorio media está vacío",
+    "Un nombre concreto no coincide con el catálogo",
+    "La API local falla aunque los medios funcionan",
+    "El comando depende de software no declarado"
+  ],
+  "acceptance_criteria": [
+    "Existe un único procedimiento local recomendado",
+    "El procedimiento sirve media sin copiarla al bundle",
+    "Un JPG responde 200 y image/jpeg a través de Vite",
+    "Un GIF responde 200 y image/gif a través de Vite",
+    "Biblioteca, detalle y alternancia funcionan localmente",
+    "Servidor apagado y puerto ocupado tienen diagnóstico concreto",
+    "Docker y los builds existentes conservan su comportamiento"
+  ],
+  "dependencies": {
+    "functional": [
+      "Biblioteca y detalle de ejercicios"
+    ],
+    "technical": [
+      "Vite",
+      "MEDIA_TARGET",
+      "Helper frontend/scripts/serve-media.mjs basado en Node estándar"
+    ],
+    "external": [
+      "Archivos locales de media"
+    ],
+    "depends_on_slices": []
+  },
+  "implementation_order": 3,
+  "slicing_rationale": "Aísla la experiencia de desarrollo del arreglo productivo y evita bloquear el rollout de Vercel con una decisión local no crítica.",
+  "risks": [
+    "Herramienta local no declarada",
+    "Dependencia desproporcionada para servir archivos",
+    "Puerto predeterminado ocupado"
+  ],
+  "open_questions": [
+    "No quedan preguntas bloqueantes; el procedimiento se documenta en CONTRIBUTING.md"
+  ]
+}

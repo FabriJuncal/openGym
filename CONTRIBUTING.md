@@ -25,6 +25,25 @@ cd frontend && npm install && npm run dev
 cd frontend && npm test
 ```
 
+When running Vite without Docker, start the local media server in a second terminal before
+opening the exercise library:
+
+```bash
+cd frontend && npm run dev:media   # serves ../media at http://127.0.0.1:8888
+cd frontend && npm run dev         # Vite proxies /img and /gif to that server
+```
+
+For another port, keep both values aligned:
+
+```bash
+cd frontend && MEDIA_PORT=9000 npm run dev:media
+cd frontend && MEDIA_TARGET=http://127.0.0.1:9000 npm run dev
+```
+
+If the media command reports a missing dataset, run `./scripts/fetch-media.sh` from the
+repository root. A `502` for `/img` or `/gif` means the media server is not running at the
+configured `MEDIA_TARGET`; it does not mean the exercise catalog is missing.
+
 ## Guidelines
 
 - **Keep it dependency-light.** The frontend uses React + Router + Zustand and nothing else;

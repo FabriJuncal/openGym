@@ -1,0 +1,143 @@
+{
+  "slice_id": "02-slice",
+  "slice_number": "02",
+  "title": "Guarda dirigida y rollout de producción",
+  "objective": "Prevenir la pérdida accidental de la configuración CDN y llevar a producción el preview validado con verificación y rollback definidos.",
+  "problem": "Un preview funcional no corrige producción y un cambio futuro del build podría restaurar silenciosamente las rutas relativas rotas.",
+  "value_outcome": "Producción muestra los medios y existe una comprobación acotada que detecta la regresión principal.",
+  "scope": {
+    "includes": [
+      "Guarda frontend/scripts/check-vercel-media.mjs sobre ambas bases CDN",
+      "Build específico como gate",
+      "Confirmación final del preview",
+      "Promoción mediante el flujo existente",
+      "Smoke productivo de un JPG y un GIF",
+      "Rollback con trigger y criterio de éxito"
+    ],
+    "excludes": [
+      "Validación HTTP de los 2648 recursos",
+      "Regresión funcional completa",
+      "Pruebas de rendimiento, carga o seguridad",
+      "Cambios a ejercicios, API, datos, Docker o aplicaciones nativas",
+      "Nueva plataforma de observabilidad"
+    ]
+  },
+  "actors": [
+    "Desarrollador implementador",
+    "Reviewer o responsable de release",
+    "Vercel",
+    "Usuario web de producción"
+  ],
+  "preconditions": [
+    "01-slice está aceptado",
+    "El preview es accesible y está validado",
+    "Existe permiso para promover a producción",
+    "El deployment anterior es identificable"
+  ],
+  "inputs": [
+    "Artefacto o commit validado",
+    "Comando build:vercel",
+    "URL del preview",
+    "URL de producción",
+    "Ejercicio de muestra con JPG y GIF",
+    "Identificador del deployment anterior"
+  ],
+  "outputs": [
+    "Guarda dirigida de configuración",
+    "Evidencia de build exitoso",
+    "Deployment productivo promovido",
+    "Evidencia de smoke productivo",
+    "Referencia y procedimiento de rollback"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Agregar la guarda",
+      "description": "Implementar una comprobación mínima que falle si falta una de las bases CDN."
+    },
+    {
+      "step": 2,
+      "name": "Ejecutar gates",
+      "description": "Ejecutar build:vercel, la guarda y el smoke final del preview."
+    },
+    {
+      "step": 3,
+      "name": "Preparar rollback",
+      "description": "Identificar el deployment productivo anterior antes de promover."
+    },
+    {
+      "step": 4,
+      "name": "Promover",
+      "description": "Promover el mismo commit o artefacto validado mediante el flujo existente."
+    },
+    {
+      "step": 5,
+      "name": "Verificar producción",
+      "description": "Comprobar un JPG, un GIF, su renderizado y la alternancia del detalle."
+    },
+    {
+      "step": 6,
+      "name": "Aplicar rollback si corresponde",
+      "description": "Restaurar el deployment anterior si falla un criterio obligatorio y verificar la recuperación."
+    }
+  ],
+  "business_rules": [
+    "Sólo se promueve el commit o artefacto validado en preview",
+    "La carga del HTML no sustituye la validación de medios",
+    "La guarda valida configuración y no todo el dataset",
+    "Un fallo inmediato de medios activa rollback si no puede corregirse de forma segura",
+    "El rollback protege la aplicación aunque restaure el fallo previo de medios"
+  ],
+  "validations": [
+    "La guarda detecta la ausencia de cualquiera de las bases CDN",
+    "El build específico termina con exit code 0",
+    "El preview conserva los criterios aceptados",
+    "Producción responde 200 para el JPG y el GIF seleccionados",
+    "Los recursos renderizados tienen dimensión natural mayor que cero",
+    "No hay errores 404, 502, CORS o mixed-content en el flujo verificado"
+  ],
+  "error_cases": [
+    "La guarda falla antes del rollout",
+    "Preview y producción ejecutan configuraciones distintas",
+    "jsDelivr falla antes de la promoción",
+    "El deployment rompe un flujo no relacionado de forma evidente",
+    "Sólo falla el uso offline, que permanece fuera de alcance salvo definición posterior"
+  ],
+  "acceptance_criteria": [
+    "Existe una guarda que detecta la pérdida de cualquiera de las dos bases CDN",
+    "El build y la guarda terminan correctamente",
+    "El deployment anterior se identifica antes del rollout",
+    "Se promueve el mismo commit o artefacto validado",
+    "Un JPG y un GIF cargan con status 200 en producción",
+    "La alternancia GIF/JPG funciona en producción",
+    "El rollback está registrado con criterio de éxito verificable"
+  ],
+  "dependencies": {
+    "functional": [
+      "Criterios aceptados en 01-slice",
+      "Flujo de biblioteca y detalle"
+    ],
+    "technical": [
+      "Flujo de Vercel",
+      "Comando build:vercel",
+      "Script frontend/scripts/check-vercel-media.mjs sin framework E2E nuevo"
+    ],
+    "external": [
+      "jsDelivr",
+      "Vercel"
+    ],
+    "depends_on_slices": [
+      "01-slice"
+    ]
+  },
+  "implementation_order": 2,
+  "slicing_rationale": "Separa el cambio productivo y su rollback de la configuración inicial para exigir evidencia del preview antes de afectar usuarios.",
+  "risks": [
+    "Guarda frágil si depende de nombres de chunks",
+    "El rollback restaura el fallo previo de medios",
+    "La disponibilidad externa cambia entre preview y producción"
+  ],
+  "open_questions": [
+    "Cuál es el identificador del deployment anterior al rollout"
+  ]
+}
