@@ -1,0 +1,136 @@
+{
+  "slice_id": "01-slice",
+  "slice_number": "01",
+  "title": "Build CDN de Vercel y validación en preview",
+  "objective": "Producir un deployment preview de Vercel en el que las imágenes y animaciones de los ejercicios incluidos carguen desde el CDN versionado.",
+  "problem": "El build actual genera rutas img/ y gif/, pero Vercel no publica las carpetas media y responde 404 para esos recursos.",
+  "value_outcome": "La biblioteca y el detalle de un ejercicio muestran su JPG y GIF en un preview sin errores de red de medios.",
+  "scope": {
+    "includes": [
+      "Validar un JPG y un GIF en el CDN versionado",
+      "Crear un script build:vercel separado",
+      "Configurar Vercel para usar build:vercel",
+      "Mantener media fuera del artefacto",
+      "Generar y validar un deployment preview"
+    ],
+    "excludes": [
+      "Promoción a producción",
+      "Cambios al catálogo o sus medios",
+      "Medios para ejercicios personalizados",
+      "Cambios a Docker, API o builds nativos",
+      "Caché offline cross-origin",
+      "Validación individual de los 1324 recursos"
+    ]
+  },
+  "actors": [
+    "Desarrollador implementador",
+    "Reviewer del preview",
+    "Vercel",
+    "jsDelivr",
+    "Usuario de validación"
+  ],
+  "preconditions": [
+    "Las dependencias de frontend están instaladas",
+    "El proyecto está vinculado con Vercel",
+    "Existe acceso para crear un deployment preview",
+    "La revisión CDN usada por build:mobile está identificada",
+    "Existe un ejercicio de muestra con JPG y GIF"
+  ],
+  "inputs": [
+    "frontend/package.json",
+    "vercel.json",
+    "frontend/src/lib/exercises.js",
+    "Bases CDN versionadas de imágenes y videos",
+    "Nombre de un JPG y un GIF representativos"
+  ],
+  "outputs": [
+    "Script build:vercel",
+    "Configuración de Vercel actualizada",
+    "Bundle con URLs CDN absolutas",
+    "Deployment preview validado",
+    "Evidencia HTTP de un JPG y un GIF"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Validar el origen",
+      "description": "Solicitar un JPG y un GIF del CDN fijado y confirmar status, HTTPS y MIME."
+    },
+    {
+      "step": 2,
+      "name": "Configurar el build",
+      "description": "Agregar build:vercel con VITE_IMG_BASE y VITE_GIF_BASE sin activar VITE_MOBILE."
+    },
+    {
+      "step": 3,
+      "name": "Alinear Vercel",
+      "description": "Configurar el buildCommand de Vercel para ejecutar build:vercel."
+    },
+    {
+      "step": 4,
+      "name": "Construir y revisar el artefacto",
+      "description": "Ejecutar el build local, comprobar las bases compiladas y confirmar que media no fue copiado."
+    },
+    {
+      "step": 5,
+      "name": "Validar el preview",
+      "description": "Crear el preview y comprobar miniatura, GIF, alternancia a JPG y respuestas de red."
+    }
+  ],
+  "business_rules": [
+    "El CDN usa una revisión inmutable",
+    "Las bases terminan en barra",
+    "El build de Vercel no activa modo móvil",
+    "Los ejercicios personalizados continúan sin medios",
+    "media permanece fuera del artefacto de Vercel"
+  ],
+  "validations": [
+    "El JPG de muestra responde 200 y image/jpeg",
+    "El GIF de muestra responde 200 y image/gif",
+    "npm --prefix frontend run build:vercel termina con exit code 0",
+    "El bundle contiene las dos bases CDN",
+    "El preview no solicita las rutas relativas de medios al dominio de Vercel",
+    "Los medios verificados tienen dimensión natural mayor que cero"
+  ],
+  "error_cases": [
+    "La revisión CDN no contiene el archivo de muestra",
+    "Una base sin barra final produce una URL inválida",
+    "El preview conserva un bundle anterior",
+    "Sólo una de las dos bases está configurada",
+    "Errores de API local se confunden con errores de medios"
+  ],
+  "acceptance_criteria": [
+    "Existe un build de Vercel separado con ambas bases CDN versionadas",
+    "Vercel utiliza ese build en el preview",
+    "Una miniatura JPG carga con status 200 y ancho natural mayor que cero",
+    "El GIF del detalle carga con status 200 y ancho natural mayor que cero",
+    "La interacción sobre la animación muestra el JPG correspondiente",
+    "No hay 404 o 502 para los medios verificados",
+    "El artefacto no contiene media/img ni media/gif"
+  ],
+  "dependencies": {
+    "functional": [
+      "Componente Media",
+      "Helpers imgSrc y gifSrc"
+    ],
+    "technical": [
+      "Vite",
+      "Configuración de Vercel"
+    ],
+    "external": [
+      "jsDelivr",
+      "Revisión fijada de hasaneyldrm/exercises-dataset"
+    ],
+    "depends_on_slices": []
+  },
+  "implementation_order": 1,
+  "slicing_rationale": "Entrega la corrección observable más temprana y valida el origen externo antes de cualquier promoción productiva.",
+  "risks": [
+    "Indisponibilidad de jsDelivr",
+    "Bases incorrectas o sin barra final",
+    "La caché offline no intercepta recursos cross-origin"
+  ],
+  "open_questions": [
+    "Si el comportamiento offline se tratará como un requerimiento posterior"
+  ]
+}
