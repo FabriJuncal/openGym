@@ -1,0 +1,246 @@
+{
+  "slice_id": "03-slice",
+  "slice_number": "03",
+  "title": "Calidad terminológica y cierre transversal",
+  "status": "COMPLETADO",
+  "objective": "Regenerar el catálogo español con convenciones mantenibles, corregir traducciones incorrectas conocidas y demostrar el recorrido EN a ES a EN.",
+  "problem": "La revisión posterior encontró traducciones incorrectas en el plan demo y siglas que incumplían las convenciones. H-01 y H-02 se corrigieron desde overrides y normalización versionados.",
+  "value_outcome": "Las superficies muestran nombres reconocibles y consistentes en español, y las decisiones terminológicas se conservan en futuras regeneraciones.",
+  "scope": {
+    "includes": [
+      "Glosario español versionado",
+      "Overrides separados del generador",
+      "Reglas de terminología y normalización",
+      "Corrección de ejemplos conocidos",
+      "Revisión humana dirigida",
+      "Regeneración y validación completa",
+      "Smoke desktop y móvil",
+      "Verificación de lazy loading y persistencia intacta"
+    ],
+    "excludes": [
+      "Revisión humana individual de 1324 nombres",
+      "Otros idiomas",
+      "Traducción runtime",
+      "Rediseño general",
+      "Matching CSV en español",
+      "Traducción de personalizados",
+      "Optimización general de chunks"
+    ]
+  },
+  "actors": [
+    "Persona que usa el catálogo en español",
+    "Desarrollador que regenera el catálogo",
+    "Reviewer funcional de terminología",
+    "QA del smoke dirigido"
+  ],
+  "preconditions": [
+    "01-slice aplicado",
+    "02-slice aplicado",
+    "Generador operativo",
+    "Plan demo disponible",
+    "Servidor local de medios disponible"
+  ],
+  "inputs": [
+    "scripts/build-exercise-names.mjs",
+    "frontend/src/exercise-names/es.js",
+    "Nombres canónicos de EXDB",
+    "Errores detectados en smoke",
+    "Plan demo",
+    "Convenciones de español de entrenamiento"
+  ],
+  "outputs": [
+    "Glosario y overrides mantenibles",
+    "Catálogo regenerado",
+    "Nombres conocidos corregidos",
+    "Reporte limpio de normalización",
+    "Evidencia de tests, build y smoke",
+    "Pack español separado del bundle inicial"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Versionar terminología",
+      "description": "Crear glosario, convenciones y overrides separados."
+    },
+    {
+      "step": 2,
+      "name": "Normalizar y corregir",
+      "description": "Aplicar reglas seguras y corregir los nombres incorrectos conocidos."
+    },
+    {
+      "step": 3,
+      "name": "Regenerar y revisar",
+      "description": "Regenerar el pack, inspeccionar el diff y revisar el conjunto dirigido."
+    },
+    {
+      "step": 4,
+      "name": "Cerrar transversalmente",
+      "description": "Ejecutar validador, suite, build y smoke EN a ES a EN en desktop y móvil."
+    }
+  ],
+  "business_rules": [
+    "Términos habituales de fuerza prevalecen sobre traducciones literales",
+    "pull-up se expresa como dominada",
+    "row se expresa como remo",
+    "dip se expresa como fondos cuando corresponde",
+    "deadlift se expresa como peso muerto",
+    "press se conserva cuando es habitual",
+    "Smith y EZ preservan su forma acordada",
+    "No hay puntos finales ni espacios sobrantes",
+    "Decisiones humanas viven en glosario u overrides",
+    "Nombres iguales para IDs distintos son válidos"
+  ],
+  "validations": [
+    "Cero faltantes, extras, vacíos o duplicados",
+    "Cero espacios iniciales o finales",
+    "Cero puntuación terminal no permitida",
+    "Errores conocidos ausentes",
+    "Plan demo y levantamientos principales usan el glosario",
+    "Búsqueda funciona por español, inglés y sin diacríticos",
+    "Alt coincide con nombre visible",
+    "Personalizados permanecen idénticos",
+    "Chunk español continúa separado",
+    "Smoke sin errores con servidor de medios activo"
+  ],
+  "error_cases": [
+    "Una regla automática afecta una sigla y requiere excepción",
+    "La traducción externa cambia y el diff debe revisarse",
+    "Dos variantes pierden un calificador y requieren override",
+    "Un nombre largo desborda en móvil",
+    "El servidor de medios ausente genera errores ambientales"
+  ],
+  "acceptance_criteria": [
+    "Existe un glosario versionado",
+    "Overrides separados del generador",
+    "Catálogo pasa todas las validaciones estructurales",
+    "No hay puntuación terminal ni espacios sobrantes",
+    "Errores terminológicos conocidos corregidos",
+    "Revisión dirigida completada",
+    "Todas las superficies nominales muestran español coherente",
+    "Volver a inglés restaura nombres canónicos sin mutar datos",
+    "Nombres largos son legibles en móvil",
+    "Check, suite y build terminan correctamente",
+    "Smoke registra cero errores atribuibles a la aplicación"
+  ],
+  "dependencies": {
+    "functional": [
+      "Fallback seguro",
+      "Validador estructural",
+      "Implementación del Spec 02"
+    ],
+    "technical": [
+      "Generador y pack español",
+      "Vite",
+      "Vitest",
+      "Modo demo",
+      "Servidor local de medios"
+    ],
+    "external": [
+      "Fuente de traducción sólo durante regeneración, si continúa utilizándose",
+      "Revisión humana dirigida"
+    ],
+    "depends_on_slices": [
+      "01-slice",
+      "02-slice"
+    ]
+  },
+  "implementation_order": 3,
+  "slicing_rationale": "Cierra la iniciativa sobre un resolver seguro y un validador confiable, concentrando la revisión terminológica y la regresión transversal en una sola entrega observable.",
+  "risks": [
+    "Reglas generales pueden degradar traducciones correctas",
+    "La revisión lingüística puede crecer sin límite",
+    "La API de traducción no es una fuente estable",
+    "El rollback debe revertir catálogo, glosario y generador juntos"
+  ],
+  "open_questions": [
+    "Registrar el conjunto revisado y los términos deliberadamente conservados en inglés al cerrar la corrección"
+  ],
+  "handoff": {
+    "objective": "Completar H-01 y H-02 dentro del alcance original del 03-slice",
+    "documentation": "03-slice.md#21-tarea-de-corrección-para-derivar",
+    "baseline": {
+      "tests": { "files_passed": 11, "tests_passed": 203 },
+      "catalogue": "1324/1324",
+      "build": "Exitoso; warning conocido de tamaño de chunk fuera de alcance",
+      "diff_check": "Limpio",
+      "verification_scope": "Revisión de código, catálogo y pruebas; no se repitió el smoke de navegador del cierre inicial",
+      "limitation": "La suite actual no detecta H-01 ni H-02; esta evidencia no demuestra la futura corrección"
+    },
+    "findings": [
+      {
+        "id": "H-01",
+        "title": "Terminología incorrecta en ejercicios del plan demo",
+        "type": "OBLIGATORIA",
+        "impact": "Medio",
+        "confidence": "Alta",
+        "status": "RESUELTO",
+        "evidence": "Los IDs pertenecen al plan de frontend/src/lib/starter.js y los valores actuales están en el pack español",
+        "consequence": "Nombres confusos en la rutina; flexión describe el movimiento contrario en 0241",
+        "corrections": [
+          { "id": "0027", "canonical": "barbell bent over row", "actual": "barra inclinada sobre remo", "expected": "remo inclinado con barra" },
+          { "id": "1323", "canonical": "cable rope seated row", "actual": "cable cuerda fila sentada", "expected": "remo sentado en polea con cuerda" },
+          { "id": "0241", "canonical": "cable triceps pushdown (v-bar)", "actual": "flexión de tríceps con cable (barra en V)", "expected": "extensión de tríceps en polea (barra en V)" }
+        ],
+        "action": "Overrides aplicados, catálogo regenerado y valores por ID cubiertos en frontend/src/lib/i18n.test.js"
+      },
+      {
+        "id": "H-02",
+        "title": "Siglas que incumplen el glosario",
+        "type": "OBLIGATORIA",
+        "impact": "Bajo",
+        "confidence": "Alta",
+        "status": "RESUELTO",
+        "evidence": "0447 contiene barra ez; 1656 contiene pelota bosu. properPrefixes solo preserva formas ya correctas al inicio",
+        "consequence": "El pack incumple las convenciones versionadas y regenerarlo conserva el defecto",
+        "action": "Normalización aplicada a tokens completos EZ y BOSU; pruebas focalizadas preservan Smith, TRX, SkiErg y fragmentos de otras palabras",
+        "constraint": "Se mantiene una regla acotada de tokens; no se introdujeron sustituciones lingüísticas generales"
+      }
+    ],
+    "demo_review_ids": ["0025", "0047", "0426", "0334", "0241", "0251", "2330", "0027", "1323", "0031", "0313", "0043", "0085", "0739", "0585", "0586", "0605"],
+    "files": [
+      "scripts/exercise-names/es-glossary.mjs",
+      "scripts/exercise-names/es-glossary.md",
+      "frontend/src/exercise-names/es.js (solo generado)",
+      "frontend/src/lib/i18n.test.js",
+      "Test focalizado de normalizeExerciseName en Vitest",
+      "scripts/build-exercise-names.mjs (solo si se necesita)"
+    ],
+    "steps": [
+      "Agregar overrides y normalización acotada; registrar revisión del demo en el glosario",
+      "Agregar pruebas que fallen con el estado actual para los tres nombres y las siglas al inicio, en medio y entre paréntesis; preservar palabras y nombres propios",
+      "Regenerar con --from-current, revisar diff, conservar 1324 IDs y verificar que una segunda ejecución produce el mismo contenido",
+      "Ejecutar checker, suite, build y diff-check; registrar resultados y códigos de salida",
+      "Smoke dirigido EN a ES a EN en biblioteca/búsqueda, detalle y rutina demo; comprobar legibilidad móvil de nombres cambiados",
+      "Actualizar estados y evidencia en Markdown y JSON una vez cumplida la aceptación"
+    ],
+    "commands": [
+      { "cwd": ".", "command": "node scripts/build-exercise-names.mjs --from-current" },
+      { "cwd": "frontend", "command": "npm run check:exercise-names" },
+      { "cwd": "frontend", "command": "npm test" },
+      { "cwd": "frontend", "command": "npm run build" },
+      { "cwd": ".", "command": "git diff --check" }
+    ],
+    "scope_limits": [
+      "No reimplementar slices 1 y 2 ni repetir correcciones previas verificadas",
+      "No auditar individualmente los 1324 nombres",
+      "No modificar IDs, persistencia, personalizados, otros idiomas o layout",
+      "No repetir toda la regresión transversal por estas correcciones de contenido",
+      "Iniciar npm run dev:media desde frontend si el smoke revisa medios"
+    ],
+    "closure_criteria": [
+      "H-01 y H-02 resueltos desde fuentes versionadas y reflejados en el pack",
+      "Siglas correctas sin modificar otras palabras y revisión del demo registrada",
+      "Pruebas dirigidas, checker, suite, build y smoke acotado exitosos",
+      "Revisar solo hallazgos pendientes y partes modificadas; warning conocido de chunk no bloquea"
+    ],
+    "correction_evidence": {
+      "status": "COMPLETA",
+      "deterministic_generation_sha1": "525b9d69f3942e24d0087eca7e6bc0fe8eb452f5",
+      "catalogue_check": "1324/1324 válido",
+      "tests": { "files_passed": 12, "tests_passed": 206 },
+      "build": "Exitoso; warning conocido de tamaño de chunk fuera de alcance",
+      "diff_check": "Limpio",
+      "smoke": "EN a ES a EN en biblioteca/búsqueda, detalle y rutina Pull Day; móvil 390x844 legible; 0 errores y 0 warnings de consola con servidor local de medios"
+    }
+  }
+}

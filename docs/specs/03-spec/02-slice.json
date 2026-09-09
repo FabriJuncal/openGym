@@ -1,0 +1,129 @@
+{
+  "slice_id": "02-slice",
+  "slice_number": "02",
+  "title": "Validador estructural comprobable",
+  "objective": "Convertir las reglas estructurales del catálogo español en validaciones automatizadas para faltantes, extras, vacíos y duplicados.",
+  "problem": "El CLI importa el pack como objeto y pierde evidencia de claves duplicadas antes de validarlas; tampoco existen fixtures negativos que demuestren cada categoría y su resultado no exitoso.",
+  "value_outcome": "Un desarrollador puede ejecutar un comando y obtener una respuesta confiable y accionable ante cualquier desalineación estructural del catálogo.",
+  "scope": {
+    "includes": [
+      "Función pura de validación",
+      "Entrada que preserve duplicados",
+      "Reporte missing, extra, empty y duplicate",
+      "Exit codes reproducibles",
+      "Fixtures positivos y negativos",
+      "Compatibilidad con npm run check:exercise-names"
+    ],
+    "excludes": [
+      "Evaluación lingüística",
+      "Unicidad de nombres traducidos",
+      "Regeneración del catálogo",
+      "Cambios de runtime",
+      "Creación de un nuevo servicio de CI"
+    ]
+  },
+  "actors": [
+    "Desarrollador que genera el catálogo",
+    "Reviewer que requiere evidencia de cobertura",
+    "Flujo local o CI existente"
+  ],
+  "preconditions": [
+    "EXDB contiene IDs únicos",
+    "Existe un catálogo español versionado",
+    "El comando check:exercise-names está definido",
+    "El runner actual puede probar lógica aislada"
+  ],
+  "inputs": [
+    "scripts/check-exercise-names.mjs",
+    "frontend/src/exercise-names/es.js o fuente equivalente",
+    "frontend/src/lib/exercises-data.js",
+    "Fixtures válidos e inválidos"
+  ],
+  "outputs": [
+    "Validador importable y testeable",
+    "CLI compatible",
+    "Reporte con cuatro categorías",
+    "Pruebas negativas",
+    "Catálogo real validado"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Extraer validación",
+      "description": "Crear una función pura que reciba IDs esperados y entradas localizadas."
+    },
+    {
+      "step": 2,
+      "name": "Preservar duplicados",
+      "description": "Validar una representación ordenada antes de construir el mapa runtime."
+    },
+    {
+      "step": 3,
+      "name": "Adaptar CLI",
+      "description": "Imprimir el resultado estructurado y asignar el exit code correspondiente."
+    },
+    {
+      "step": 4,
+      "name": "Probar casos",
+      "description": "Ejecutar fixtures positivos y negativos y validar el catálogo real."
+    }
+  ],
+  "business_rules": [
+    "Existe exactamente una entrada no vacía por ID de EXDB",
+    "Nombres iguales entre IDs distintos son válidos",
+    "Un ID repetido en la fuente es inválido",
+    "Valores no string o sólo espacios son vacíos",
+    "El validador informa pero no corrige",
+    "Los resultados son deterministas"
+  ],
+  "validations": [
+    "Fixture válido sin errores",
+    "Faltante en missing",
+    "Extra en extra",
+    "Vacío, espacios o no string en empty",
+    "Repetido en duplicate",
+    "Nombres iguales con IDs distintos son válidos",
+    "CLI devuelve 0 sólo para válido",
+    "Catálogo real informa 1324/1324"
+  ],
+  "error_cases": [
+    "Fuente ilegible o inválida produce error explícito",
+    "Entrada sin ID produce error estructural",
+    "Duplicado con valores distintos se reporta una vez",
+    "Varias categorías se informan juntas",
+    "Nombre repetido entre IDs no se marca"
+  ],
+  "acceptance_criteria": [
+    "La lógica se prueba sin mutar el catálogo real",
+    "Los cinco escenarios están automatizados",
+    "Duplicados se detectan antes del mapa",
+    "El reporte identifica categorías e IDs",
+    "El comando npm existente sigue siendo la interfaz",
+    "El pack real devuelve 0 y 1324/1324",
+    "Fixtures inválidos devuelven estado no exitoso",
+    "Suite y build continúan pasando"
+  ],
+  "dependencies": {
+    "functional": [
+      "Contrato estructural del catálogo del Spec 02"
+    ],
+    "technical": [
+      "Node.js ESM",
+      "EXDB",
+      "Script y pack existentes",
+      "Runner de tests"
+    ],
+    "external": [],
+    "depends_on_slices": []
+  },
+  "implementation_order": 2,
+  "slicing_rationale": "Aísla el tooling verificable antes de regenerar el catálogo y permite que el último slice cierre sobre validaciones confiables.",
+  "risks": [
+    "Un parser frágil puede producir falsos resultados",
+    "Cambiar el formato puede afectar la carga dinámica",
+    "Agregar una dependencia de parsing sería desproporcionado"
+  ],
+  "open_questions": [
+    "Elegir entre una lista de entradas exportada o una lectura determinista del artefacto fuente"
+  ]
+}

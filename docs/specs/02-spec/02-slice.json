@@ -1,0 +1,152 @@
+{
+  "slice_id": "02-slice",
+  "slice_number": "02",
+  "title": "Nombres localizados en planificación",
+  "objective": "Extender el nombre español centralizado a selección, configuración, rutinas y plan imprimible sin cambiar datos compartidos o persistidos.",
+  "problem": "El flujo de planificación seguiría mostrando ex.n en inglés después de localizar biblioteca y detalle.",
+  "value_outcome": "La persona busca, agrega, configura y revisa ejercicios de una rutina en español y genera un plan imprimible localizado con serialización compatible.",
+  "scope": {
+    "includes": [
+      "Selector de ejercicios y búsqueda bilingüe",
+      "Ordenamiento visible por nombre localizado",
+      "Hoja de agregado a rutina",
+      "Mensajes y toasts de planificación",
+      "Lista y configuración de ejercicios de rutina",
+      "Nombre localizado en plan imprimible",
+      "Validación de compatibilidad del bundle compartido",
+      "Smoke dirigido EN a ES a EN"
+    ],
+    "excludes": [
+      "Entrenamiento activo",
+      "Historial",
+      "Estadísticas y PR",
+      "Cambios al formato opengym_plan",
+      "Traducción de nombres de rutinas",
+      "Traducción adicional de metadatos",
+      "Matching CSV en español"
+    ]
+  },
+  "actors": [
+    "Persona que crea o edita una rutina",
+    "Persona que comparte o imprime un plan",
+    "Persona que importa un plan existente",
+    "Desarrollador implementador"
+  ],
+  "preconditions": [
+    "01-slice implementado y validado",
+    "nameFor está disponible",
+    "La búsqueda bilingüe está disponible",
+    "El formato de planes compartidos se mantiene como contrato"
+  ],
+  "inputs": [
+    "frontend/src/sheets.jsx",
+    "frontend/src/views/RoutineEdit.jsx",
+    "frontend/src/lib/plan-share.js",
+    "nameFor y normalización de búsqueda",
+    "Rutinas y ejercicios personalizados del store"
+  ],
+  "outputs": [
+    "Selector y buscador localizados",
+    "Rutinas y configuración con nombres españoles",
+    "Mensajes y toasts coherentes",
+    "PDF con nombres españoles",
+    "Bundle compartido compatible",
+    "Evidencia del flujo EN a ES a EN"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Localizar selección",
+      "description": "Aplicar búsqueda bilingüe y nameFor al selector de ejercicios."
+    },
+    {
+      "step": 2,
+      "name": "Localizar agregado y configuración",
+      "description": "Usar el nombre visible en hojas, mensajes, toasts y configuración."
+    },
+    {
+      "step": 3,
+      "name": "Localizar rutinas",
+      "description": "Mostrar nameFor en la lista de ejercicios de cada rutina."
+    },
+    {
+      "step": 4,
+      "name": "Localizar impresión",
+      "description": "Resolver nombres por ID para el HTML imprimible conservando el escape."
+    },
+    {
+      "step": 5,
+      "name": "Preservar contratos",
+      "description": "Comprobar que buildPlanBundle, parsePlan y mergePlan mantienen el formato actual."
+    },
+    {
+      "step": 6,
+      "name": "Verificar planificación",
+      "description": "Ejecutar pruebas dirigidas, suite, build y smoke EN a ES a EN."
+    }
+  ],
+  "business_rules": [
+    "Las rutinas guardan ID y configuración, no nombre localizado",
+    "Los ejercicios incluidos se comparten por ID",
+    "Los personalizados conservan y comparten su campo n",
+    "La importación de planes no depende del idioma",
+    "Los placeholders continúan visibles y removibles",
+    "El PDF refleja el idioma activo al generarse"
+  ],
+  "validations": [
+    "El selector encuentra nombres españoles e ingleses",
+    "Los resultados muestran el idioma activo",
+    "Agregar un ejercicio muestra título y toast localizados",
+    "Rutina y configuración muestran el mismo nombre",
+    "Los personalizados conservan su nombre",
+    "Un ID no resoluble muestra el placeholder",
+    "El HTML contiene el nombre localizado escapado",
+    "El bundle mantiene el contrato para ejercicios incluidos",
+    "Un plan existente se parsea y fusiona sin depender del idioma"
+  ],
+  "error_cases": [
+    "Falta una traducción en runtime",
+    "El ejercicio es personalizado",
+    "El ID no puede resolverse",
+    "El nombre contiene caracteres HTML",
+    "Dos traducciones visibles coinciden"
+  ],
+  "acceptance_criteria": [
+    "Selector, agregado, rutina y configuración muestran español con idioma es",
+    "El selector encuentra por nombre español o inglés",
+    "Títulos, confirmaciones y toasts usan el mismo nombre visible",
+    "El plan imprimible contiene nombres españoles escapados",
+    "Las superficies vuelven a nombres canónicos con idioma en",
+    "Los personalizados no cambian de nombre",
+    "Rutinas, bundles e importaciones no requieren nombres localizados de incluidos",
+    "Un ejercicio no resoluble sigue visible y removible",
+    "La suite existente y el build finalizan correctamente"
+  ],
+  "dependencies": {
+    "functional": [
+      "Store de rutinas y personalizados",
+      "EXIDX y exOr",
+      "Generador de plan imprimible"
+    ],
+    "technical": [
+      "nameFor",
+      "Búsqueda normalizada",
+      "Vitest y Vite"
+    ],
+    "external": [],
+    "depends_on_slices": [
+      "01-slice"
+    ]
+  },
+  "implementation_order": 2,
+  "slicing_rationale": "Completa un flujo funcional de selección a impresión reutilizando la base validada del primer slice y manteniendo aislado el entrenamiento.",
+  "risks": [
+    "Mutación accidental de la serialización",
+    "Superficie secundaria que conserve ex.n",
+    "HTML no escapado",
+    "Nombres extensos en rutina o PDF"
+  ],
+  "open_questions": [
+    "La traducción de otros metadatos del PDF permanece fuera de alcance"
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "slice_id": "01-slice",
+  "slice_number": "01",
+  "title": "Fallback seguro para nombres no resolubles",
+  "objective": "Evitar excepciones y conservar un nombre visible cuando la aplicación recibe ejercicios ausentes, IDs obsoletos, snapshots históricos o ejercicios personalizados con el idioma español activo.",
+  "problem": "nameFor(ex) accede a ex.id con el pack español cargado y lanza TypeError ante null o undefined; consumidores que resuelven EXIDX[id] pueden romperse ante IDs desconocidos.",
+  "value_outcome": "Historial, PR, 1RM y entrenamiento permanecen operativos ante IDs no resolubles, mientras los ejercicios personalizados conservan exactamente su nombre.",
+  "scope": {
+    "includes": [
+      "Guard clause para null y undefined",
+      "Prioridad explícita para nombres personalizados",
+      "Fallback localizado, canónico, snapshot o vacío",
+      "Fallback visible por ID en PR y 1RM",
+      "Validación de historial con entradas resolubles y no resolubles",
+      "Pruebas unitarias y smoke dirigido"
+    ],
+    "excludes": [
+      "Cambios al contenido del catálogo español",
+      "Cambios en cálculos de PR, 1RM, volumen o progresión",
+      "Migraciones de historial",
+      "Cambios a importaciones o planes compartidos",
+      "Nuevos idiomas"
+    ]
+  },
+  "actors": [
+    "Persona con historial antiguo o importado",
+    "Persona con ejercicios personalizados",
+    "Desarrollador del resolver y consumidores de progreso"
+  ],
+  "preconditions": [
+    "Spec 02 implementado",
+    "nameFor usado por las superficies visibles",
+    "Pack español cargable mediante setLang"
+  ],
+  "inputs": [
+    "frontend/src/lib/i18n.js",
+    "frontend/src/lib/i18n.test.js",
+    "frontend/src/sheets.jsx",
+    "Ejercicio incluido, personalizado, snapshot, ID desconocido, null y undefined"
+  ],
+  "outputs": [
+    "Resolver que no lanza por ausencia de entrada",
+    "Personalizados que no consultan el pack",
+    "Historial, PR y 1RM con fallback visible",
+    "Pruebas reproducibles en español e inglés"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Definir precedencia",
+      "description": "Fijar el orden de resolución para ausentes, personalizados, localizados y snapshots."
+    },
+    {
+      "step": 2,
+      "name": "Endurecer el resolver",
+      "description": "Aplicar guard clauses y evitar consultar el pack para personalizados."
+    },
+    {
+      "step": 3,
+      "name": "Asegurar consumidores",
+      "description": "Garantizar fallback por ID en historial, PR y 1RM."
+    },
+    {
+      "step": 4,
+      "name": "Validar",
+      "description": "Ejecutar tests dirigidos, suite completa y smoke con español activo."
+    }
+  ],
+  "business_rules": [
+    "Personalizado tiene prioridad sobre el pack localizado",
+    "El ID permanece como identidad",
+    "El snapshot se conserva si el ejercicio ya no existe",
+    "Sin nombre disponible el consumidor muestra ID o placeholder",
+    "El nombre localizado no se persiste"
+  ],
+  "validations": [
+    "nameFor(undefined) y nameFor(null) devuelven cadena vacía en español",
+    "Incluido devuelve español en es e inglés en en",
+    "Objeto desconocido con n devuelve el snapshot",
+    "Personalizado con ID coincidente conserva su nombre",
+    "PR y 1RM desconocidos muestran ID",
+    "Historial eliminado conserva e.n",
+    "Carrera ES a EN conserva el último idioma"
+  ],
+  "error_cases": [
+    "Entrada sin id pero con n usa n",
+    "Entrada con id sin nombre ni traducción devuelve vacío",
+    "Personalizado vacío usa el placeholder vigente",
+    "ID obsoleto en PR muestra el ID y no interrumpe la lista",
+    "Pack ausente usa nombre canónico o snapshot"
+  ],
+  "acceptance_criteria": [
+    "nameFor no lanza ante null o undefined",
+    "Personalizados nunca usan el nombre de un incluido",
+    "Incluidos alternan correctamente entre español e inglés",
+    "Snapshots históricos conservan su nombre",
+    "PR y 1RM muestran IDs desconocidos",
+    "Pruebas unitarias cubren todos los fallbacks",
+    "Smoke sin errores de consola",
+    "Persistencia, cálculos y formatos permanecen sin cambios"
+  ],
+  "dependencies": {
+    "functional": [
+      "Implementación de nombres localizados del Spec 02"
+    ],
+    "technical": [
+      "nameFor",
+      "setLang",
+      "EXIDX",
+      "Vitest",
+      "Modo demo"
+    ],
+    "external": [],
+    "depends_on_slices": []
+  },
+  "implementation_order": 1,
+  "slicing_rationale": "Elimina primero el único crash comprobado y reduce el mayor riesgo funcional antes de trabajar sobre tooling y terminología.",
+  "risks": [
+    "Retornar vacío sin ajustar consumidores puede ocultar IDs",
+    "Alterar la prioridad puede traducir nombres personalizados",
+    "El resolver es compartido por múltiples superficies"
+  ],
+  "open_questions": []
+}
