@@ -1,0 +1,162 @@
+{
+  "slice_id": "01-slice",
+  "slice_number": "01",
+  "title": "Catálogo español en biblioteca y detalle",
+  "objective": "Habilitar la resolución central de nombres en español y demostrarla de punta a punta en la biblioteca y el detalle de ejercicios.",
+  "problem": "Biblioteca, detalle, búsqueda y texto alternativo leen ex.n y permanecen en inglés aunque la aplicación esté en español.",
+  "value_outcome": "La persona ve nombres españoles en biblioteca y detalle, puede buscar en español o inglés y volver a inglés sin modificar sus datos.",
+  "scope": {
+    "includes": [
+      "Pack versionado de nombres españoles por ID",
+      "Glosario o convenciones terminológicas",
+      "Validador de cobertura, IDs y valores",
+      "Carga diferida e independiente del pack",
+      "Resolver central nameFor",
+      "Protección contra cargas de idioma fuera de orden",
+      "Localización de biblioteca, detalle y texto alternativo",
+      "Búsqueda por español e inglés sin sensibilidad a diacríticos",
+      "Validación de duplicados por nombre visible y canónico",
+      "Pruebas unitarias y smoke dirigido"
+    ],
+    "excludes": [
+      "Selector de planificación",
+      "Rutinas, entrenamiento, historial y estadísticas",
+      "Plan imprimible",
+      "Otros idiomas",
+      "Matching CSV en español",
+      "Traducción de ejercicios personalizados",
+      "Traducción dinámica en producción"
+    ]
+  },
+  "actors": [
+    "Persona que navega la biblioteca en español",
+    "Persona que busca o crea ejercicios personalizados",
+    "Desarrollador responsable del catálogo e i18n",
+    "Reviewer funcional de traducciones"
+  ],
+  "preconditions": [
+    "EXDB contiene IDs únicos y nombres canónicos",
+    "El selector de español existe",
+    "setLang y useLang están operativos",
+    "Existe una fuente o proceso acordado para producir el catálogo español"
+  ],
+  "inputs": [
+    "frontend/src/lib/exercises-data.js",
+    "frontend/src/lib/i18n.js",
+    "frontend/src/lib/exercises.js",
+    "frontend/src/views/Library.jsx",
+    "frontend/src/sheets.jsx",
+    "frontend/src/components/Media.jsx",
+    "Traducciones españolas y glosario"
+  ],
+  "outputs": [
+    "Pack español completo y lazy-loaded",
+    "Validador con exit code significativo",
+    "API nameFor centralizada",
+    "Biblioteca y detalle localizados",
+    "Búsqueda bilingüe tolerante a diacríticos",
+    "Texto alternativo localizado",
+    "Evidencia de cambio EN a ES y vuelta a EN"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Construir y validar el catálogo",
+      "description": "Crear el mapa español por ID y exigir igualdad exacta con los IDs de EXDB."
+    },
+    {
+      "step": 2,
+      "name": "Integrar la carga de idioma",
+      "description": "Cargar el pack en forma diferida, con fallback independiente y protección contra resultados fuera de orden."
+    },
+    {
+      "step": 3,
+      "name": "Centralizar el nombre visible",
+      "description": "Implementar nameFor con reglas para incluidos, inglés, personalizados y fallbacks."
+    },
+    {
+      "step": 4,
+      "name": "Localizar el primer flujo",
+      "description": "Aplicar nameFor en biblioteca, detalle y Media."
+    },
+    {
+      "step": 5,
+      "name": "Adaptar búsqueda y duplicados",
+      "description": "Comparar consulta normalizada con nombre español y canónico."
+    },
+    {
+      "step": 6,
+      "name": "Verificar el slice",
+      "description": "Ejecutar unitarias, validador, suite, build y smoke EN a ES a EN."
+    }
+  ],
+  "business_rules": [
+    "El ID selecciona la traducción",
+    "Inglés es el dato canónico y fallback",
+    "El pack cubre el 100 por ciento de EXDB",
+    "El fallback runtime no justifica un pack incompleto",
+    "Los ejercicios personalizados conservan su nombre",
+    "Los recursos de idioma tienen fallbacks independientes",
+    "Sólo la última selección de idioma puede aplicarse",
+    "La búsqueda acepta nombre localizado y canónico"
+  ],
+  "validations": [
+    "Cobertura exacta de todos los IDs de EXDB",
+    "Fallo ante ID faltante, extra, duplicado o nombre vacío",
+    "nameFor devuelve español para un ejercicio incluido",
+    "nameFor devuelve inglés para en o fallback runtime",
+    "nameFor conserva personalizados y placeholders",
+    "Un fallo del pack de nombres conserva UI e instrucciones localizadas",
+    "Un cambio rápido ES a EN no deja recursos españoles activos",
+    "La búsqueda encuentra español, inglés y texto sin acento",
+    "El bundle inicial no incluye el pack español completo"
+  ],
+  "error_cases": [
+    "El pack no puede cargarse",
+    "EXDB cambia y el pack queda desalineado",
+    "Dos nombres localizados son iguales",
+    "Un ejercicio personalizado coincide por texto con uno incluido",
+    "Una carga anterior termina después de la selección vigente",
+    "La consulta queda vacía después de normalizar"
+  ],
+  "acceptance_criteria": [
+    "El pack contiene una entrada no vacía por cada ID de EXDB y ninguna adicional",
+    "El validador falla ante cualquier diferencia",
+    "Biblioteca y detalle muestran español al seleccionar es",
+    "Biblioteca y detalle vuelven a ex.n al seleccionar en",
+    "Los ejercicios personalizados no cambian de nombre",
+    "La búsqueda encuentra por español, inglés y consulta sin diacríticos",
+    "El alt de la imagen coincide con el nombre visible",
+    "Un fallo del pack usa inglés sin perder UI ni instrucciones traducidas",
+    "El pack español se carga de forma diferida",
+    "La suite existente y el build finalizan correctamente"
+  ],
+  "dependencies": {
+    "functional": [
+      "EXDB y EXIDX",
+      "Ejercicios personalizados",
+      "Biblioteca, detalle y Media"
+    ],
+    "technical": [
+      "Vite import.meta.glob",
+      "React useSyncExternalStore",
+      "Vitest"
+    ],
+    "external": [
+      "Traducciones españolas versionadas y su glosario"
+    ],
+    "depends_on_slices": []
+  },
+  "implementation_order": 1,
+  "slicing_rationale": "Entrega la primera experiencia visible completa y establece la base mínima reutilizada por planificación, entrenamiento e historial.",
+  "risks": [
+    "Inconsistencia terminológica",
+    "Desalineación futura con EXDB",
+    "Carreras entre imports asíncronos",
+    "Nombres extensos en filas móviles"
+  ],
+  "open_questions": [
+    "Formato mínimo del glosario versionado",
+    "Muestra de ejercicios comunes y variantes parecidas para revisión funcional"
+  ]
+}

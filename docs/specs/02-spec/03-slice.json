@@ -1,0 +1,162 @@
+{
+  "slice_id": "03-slice",
+  "slice_number": "03",
+  "title": "Nombres localizados en entrenamiento y progreso",
+  "objective": "Completar la localización de nombres en entrenamiento, historial, resúmenes y estadísticas, y cerrar la iniciativa con documentación y regresión dirigida.",
+  "problem": "Las superficies durante y después del entrenamiento seguirían mostrando nombres ingleses y estadísticas seguiría etiquetando y ordenando por EXIDX[id].n.",
+  "value_outcome": "La persona entrena y consulta historial, PR y progreso con nombres españoles coherentes, y vuelve a inglés sin alterar datos históricos.",
+  "scope": {
+    "includes": [
+      "Nombre localizado en entrenamiento activo",
+      "Mensajes de ejercicio completado y confirmación de peso",
+      "Detalle histórico",
+      "Resumen final, PR y mejor 1RM estimado",
+      "Selector y ordenamiento localizado de progreso",
+      "Fallback de snapshots de personalizados eliminados",
+      "Revisión móvil de nombres largos",
+      "Actualización de documentación",
+      "Auditoría de usos visuales directos de ex.n",
+      "Suite, build y smoke transversal"
+    ],
+    "excludes": [
+      "Cambios en cálculos de entrenamiento",
+      "Migraciones de historial",
+      "Traducción de personalizados",
+      "Matching CSV",
+      "Nuevos gráficos",
+      "Otros idiomas",
+      "Suite end-to-end nueva",
+      "Regresión de módulos no relacionados"
+    ]
+  },
+  "actors": [
+    "Persona que realiza un entrenamiento",
+    "Persona que consulta historial y estadísticas",
+    "Persona con ejercicios personalizados activos o eliminados",
+    "Desarrollador implementador",
+    "Reviewer funcional"
+  ],
+  "preconditions": [
+    "01-slice implementado y validado",
+    "02-slice implementado para el cierre transversal",
+    "nameFor está disponible y es reactivo",
+    "Existe historial de prueba con ejercicios incluidos y personalizados"
+  ],
+  "inputs": [
+    "frontend/src/views/Workout.jsx",
+    "frontend/src/views/Stats.jsx",
+    "frontend/src/sheets.jsx",
+    "EXIDX, exOr y snapshots históricos e.n",
+    "nameFor y locale activo",
+    "README y documentación de idiomas"
+  ],
+  "outputs": [
+    "Entrenamiento activo localizado",
+    "Historial y resúmenes con fallback correcto",
+    "PR y 1RM etiquetados en español",
+    "Estadísticas localizadas y ordenadas por locale",
+    "Datos históricos intactos",
+    "Documentación actualizada",
+    "Evidencia de smoke y build"
+  ],
+  "workflow": [
+    {
+      "step": 1,
+      "name": "Localizar entrenamiento",
+      "description": "Aplicar nameFor a la tarjeta activa, detalles y acciones de completado."
+    },
+    {
+      "step": 2,
+      "name": "Localizar historial",
+      "description": "Resolver incluidos por EXIDX y conservar snapshots de personalizados eliminados."
+    },
+    {
+      "step": 3,
+      "name": "Localizar resúmenes",
+      "description": "Usar nameFor en PR y mejor 1RM estimado sin alterar cálculos."
+    },
+    {
+      "step": 4,
+      "name": "Localizar estadísticas",
+      "description": "Etiquetar y ordenar opciones por nombre visible manteniendo value igual al ID."
+    },
+    {
+      "step": 5,
+      "name": "Cerrar cobertura",
+      "description": "Auditar usos visuales de ex.n y actualizar documentación."
+    },
+    {
+      "step": 6,
+      "name": "Verificar la iniciativa",
+      "description": "Ejecutar pruebas dirigidas, revisión móvil, smoke transversal, suite y build."
+    }
+  ],
+  "business_rules": [
+    "Las entradas históricas se identifican por ID",
+    "Un ejercicio incluido histórico usa el nombre del idioma actual",
+    "Un personalizado eliminado usa su snapshot e.n",
+    "Las opciones de estadísticas conservan el ID como valor",
+    "Los nombres no cambian cálculos de PR, 1RM, volumen o progresión",
+    "El orden localizado sólo sustituye ordenamientos existentes por nombre"
+  ],
+  "validations": [
+    "El ejercicio activo cambia ES a EN sin reiniciar el entrenamiento",
+    "Mensajes de completado coinciden con la tarjeta activa",
+    "El historial incluido usa el idioma actual",
+    "Un personalizado eliminado conserva su snapshot",
+    "PR y 1RM usan nombre localizado sin cambiar cálculos",
+    "Las opciones de progreso mantienen value igual al ID",
+    "El orden coincide con localeCompare del nombre visible",
+    "Un nombre largo es legible en viewport móvil",
+    "No quedan usos visuales canónicos dentro del alcance",
+    "La documentación no afirma que los nombres siempre quedan en inglés"
+  ],
+  "error_cases": [
+    "Un ejercicio incluido histórico no tiene pack runtime",
+    "El ID no resuelve pero existe snapshot",
+    "No existe ejercicio ni snapshot",
+    "El idioma cambia con una hoja abierta",
+    "Dos nombres localizados son iguales",
+    "El orden cambia con una opción seleccionada"
+  ],
+  "acceptance_criteria": [
+    "Entrenamiento y confirmaciones muestran español con idioma es",
+    "Historial, resumen, PR y 1RM muestran nombres localizados",
+    "Los personalizados activos o eliminados conservan su nombre",
+    "Progreso muestra y ordena por idioma manteniendo IDs",
+    "Cambiar ES a EN actualiza etiquetas sin modificar sesión o historial",
+    "Los cálculos funcionales conservan sus resultados",
+    "Importación, persistencia y snapshots continúan usando datos canónicos",
+    "La documentación describe español y fallback inglés",
+    "El smoke cubre todas las superficies del spec",
+    "La suite existente y el build finalizan correctamente"
+  ],
+  "dependencies": {
+    "functional": [
+      "Store de entrenamiento e historial",
+      "EXIDX y exOr",
+      "Cálculos existentes de PR y 1RM"
+    ],
+    "technical": [
+      "nameFor",
+      "localeCompare",
+      "Vitest y Vite"
+    ],
+    "external": [],
+    "depends_on_slices": [
+      "01-slice",
+      "02-slice"
+    ]
+  },
+  "implementation_order": 3,
+  "slicing_rationale": "Completa las superficies de entrenamiento y análisis después de validar la base y planificación, y permite cerrar la regresión transversal sin mezclar cálculos de negocio.",
+  "risks": [
+    "Confundir nombre visible con snapshot histórico",
+    "Alterar la selección al reordenar estadísticas",
+    "Dejar mensajes secundarios con nombre canónico",
+    "Truncar nombres largos en entrenamiento móvil"
+  ],
+  "open_questions": [
+    "El reconocimiento de nombres españoles en importaciones queda para una iniciativa posterior"
+  ]
+}
