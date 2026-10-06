@@ -40,11 +40,11 @@ function NikaCredit() {
       href="https://nikastudio.co/"
       target="_blank"
       rel="noopener"
-      aria-label="Nika Studio"
+      aria-label="Desarrollado por Nika Studio"
       style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none' }}
     >
+      <span>Desarrollado por</span>
       <img src="nika-studio.svg" alt="" width="55" height="32" style={{ display: 'block', height: 32, width: 'auto' }} />
-      <span>Desarrollado por Nika Studio</span>
     </a>
   )
 }
